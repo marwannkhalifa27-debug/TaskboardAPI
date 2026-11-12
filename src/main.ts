@@ -1,24 +1,22 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
-import { connectionDB } from './DB/connectionDB.js';
-import { port } from './config/env.config.js';
 import { ValidationPipe } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
+import { ConfigService } from '@nestjs/config';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  await connectionDB()
 
   app.useGlobalPipes(new ValidationPipe({
     whitelist: true,
     transform: true
   }))
+  app.setGlobalPrefix("api/v1")
 
-  app.use(MongooseModule.call(connectionDB()))
-
-  app.setGlobalPrefix("v1/api")
+  const port = app.get(ConfigService).get<number>('PORT')?? 3000
   
-  await app.listen(port ?? 3000, () => console.log(`Server is running on port ${port}`));
+  await app.listen(port)
+  console.log(`Server is running on port ${port}`)
+
 }
 await bootstrap();
