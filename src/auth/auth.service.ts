@@ -1,31 +1,65 @@
-import { Injectable } from '@nestjs/common';
-import { CreateAuthDto } from './dto/create-auth.dto.js';
+import { ConflictException, Injectable } from '@nestjs/common';
+import { CreateAuthDto, loginDto } from './dto/create-auth.dto.js';
 import { UpdateAuthDto } from './dto/update-auth.dto.js';
-import { userModel } from '../DB/models/user.model.js';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { User } from '../users/schemas/user.schema.js';
+import bcrypt from "bcrypt"
+import { generateToken } from '../utils/token.js';
+
+
 
 @Injectable()
 export class AuthService {
-  signup(createAuthDto: CreateAuthDto) {
-    if(!createAuthDto.email || !createAuthDto.password){
-      return 'Email or password inaccurate'
+
+  constructor(
+    @InjectModel(User.name) private userModel: Model<User>,
+  ) {}
+
+  findOne(args: any) {
+    return this.userModel.findOne(args);
+  }
+
+  async signup(createAuthDto: CreateAuthDto) {
+
+    const exists = await this.findOne({ email: createAuthDto.email.toLowerCase() });
+    if(exists){
+      throw new ConflictException("This email is already registered")
     }
-    const user = userModel.create(createAuthDto)
-    return 'This action adds a new auth';
+
+    const hashed = await bcrypt.hash(createAuthDto.password, 10)
+
+    try {
+      await this.userModel.create({
+        fullName: createAuthDto.fullName,
+        email: createAuthDto.email,
+        password: hashed,
+        age: createAuthDto.age,
+        gender: createAuthDto.gender as any,
+      });
+      return {
+        message: 'Registered successfully',
+        email: createAuthDto.email,
+      };
+    } catch (error: any) {
+      if (error?.code === 11000) {
+        throw new ConflictException('Email already registered');
+      }
+      throw error;
+    }
   }
 
-  findAll() {
-    return `This action returns all auth`;
-  }
+  async login(dto: loginDto){
+    const user = this.findOne({ email: dto.email.toLowerCase() })
+    if(!user){
+      throw new Error("This email isn't registered before")
+    }
 
-  findOne(id: number) {
-    return `This action returns a #${id} auth`;
-  }
+    const token = generateToken(user)
 
-  update(id: number, updateAuthDto: UpdateAuthDto) {
-    return `This action updates a #${id} auth`;
-  }
-
-  remove(id: number) {
-    return `This action removes a #${id} auth`;
+    return {
+      message: "Logged in successfully",
+      token: token
+    }
   }
 }
